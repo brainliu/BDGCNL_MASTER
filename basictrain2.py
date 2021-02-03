@@ -1,14 +1,14 @@
 # _*_coding:utf-8_*_
 # Name:Brian
-# Create_time:2021/2/1 16:49
-# file: basci_train.py
+# Create_time:2021/2/2 16:49
+# file: basci_train2.py
 # location:chengdu
 # number:610000
 import  torch.nn as nn
 import matplotlib.pyplot as plt
-from data_load import *
-from GCNM import  *
-from utils import *
+from dataload2 import *
+from GCNM2 import  *
+from utils2 import *
 # if torch.cuda.is_available():
 #     torch.cuda.set_device(0)
 
@@ -21,40 +21,54 @@ logger.info('Experiment log path in: {}'.format("./PEMS-BAY/"))
 
 
 ######model parameters
-
+data_path='./data/PEMS-BAY/pems-bay.h5'
 num_of_vertices= 325
 num_of_features= 1
 device="cuda"
-speed_matrix=pd.read_hdf('./data/PEMS-BAY/pems-bay.h5')[1:30000]
-mask_ones_proportion=0.5 #不缺失的值的比率
-seq_len=12
+speed_matrix=pd.read_hdf(data_path)#[1:10000]
+mask_ones_proportion=0.9 #不缺失的值的比率
+seq_len=10
 pred_len=12
-slide_length=8
+slide_length=5
 shuffle=True
 number_of_filters=42
 train_propotion=0.6
 valid_propotion=0.2
 BATCH_SIZE=24
+
+
+logger.info("model setting:{} ".format( time.time()))
+logger.info("data_path locatin:{} ".format( data_path))
+logger.info("history seq_len: {}".format( seq_len))
+logger.info("predict pred_len: {}".format( pred_len))
+logger.info("slide_length:{} ".format( slide_length))
+logger.info("train_propotion and  valid_propotion: {}  {} ".format( train_propotion , valid_propotion))
+logger.info("BATCH_SIZE: {}".format( BATCH_SIZE))
+
+
+
 adj_data=np.load("./data/PEMS-BAY/pems-bay_adj.npy")
 adj_two=construct_adj_double(adj_data,steps=2)
 adj_two=torch.Tensor(adj_two).to(device) #转化为tensor
-train_dataloader, valid_dataloader, test_dataloader, max_speed, X_mean=prepare_dataset(speed_matrix,mask_ones_proportion=mask_ones_proportion,seq_len=seq_len,BATCH_SIZE=BATCH_SIZE)
+train_dataloader, valid_dataloader, test_dataloader, max_speed, X_mean=prepare_dataset(speed_matrix,logger,mask_ones_proportion=mask_ones_proportion,seq_len=seq_len,pred_len = pred_len,BATCH_SIZE=BATCH_SIZE)
 model_bdgcnm=BDGCNM_model(num_of_vertices,num_of_features,slide_length,seq_len,pred_len,number_of_filters).to(device)
 
-optimizer = torch.optim.Adam(model_bdgcnm.parameters(), lr=1e-3)
+optimizer = torch.optim.Adam(model_bdgcnm.parameters(), lr=1e-5)
 # for para in model_bdgcnm.parameters():
 #     print(para)
 loss_criterion = nn.MSELoss()
 training_losses = []
 validation_losses=[]
-
-
+###########模型保存设置和训练
 best_model = None
 best_loss = float('inf')
-not_improved_count = 0
-start_epoch = 2
-epochs=20
-RESUME=1
+not_improved_count = 10
+start_epoch = 1
+epochs=100
+RESUME=0
+logger.info("epochs:{} ".format( epochs))
+
+
 if RESUME:
     path_checkpoint = "./models/checkpoint/ckpt_best_%s.pth"%start_epoch  # 断点路径
     checkpoint = torch.load(path_checkpoint)  # 加载断点
@@ -67,9 +81,9 @@ if RESUME:
     validation_losses = checkpoint["validation_losses"]
 
 for epoch in range(start_epoch, epochs + 1):
-    loss1=train_epoch(train_dataloader, adj_two, model_bdgcnm, optimizer, epoch, logger, loss_criterion, device="cuda", log_step=20)
+    loss1=train_epoch(train_dataloader, adj_two, model_bdgcnm, optimizer, epoch, logger, loss_criterion, device="cuda", log_step=2)
     val_epoch_loss = val_epoch(valid_dataloader, model_bdgcnm, adj_two, epoch, logger, loss_criterion, device="cuda",
-                               log_step=20)
+                               log_step=2)
     validation_losses.append(val_epoch_loss)
     training_losses.append(loss1)
     if val_epoch_loss < best_loss:
@@ -86,8 +100,10 @@ for epoch in range(start_epoch, epochs + 1):
 
     logger.info('**********Training loss: {},Validation loss: {}'.format(training_losses[-1],
                                                                          validation_losses[-1]))
+    plt.ylim(0, 0.5)
     plt.plot(training_losses, label="training loss")
     plt.plot(validation_losses, label="validation loss")
+
     plt.xlabel('epoches number')
     plt.ylabel('loss values')
     plt.title('the result of epoch: %s' % epoch)
@@ -109,4 +125,4 @@ for epoch in range(start_epoch, epochs + 1):
     logger.info("Saving current best model to " + save_path)
     # print(loss1)
 
-    test_all(adj_two, test_dataloader, model_bdgcnm, max_speed, logger, device="cuda")
+    test_all(adj_two, test_dataloader, model_bdgcnm, max_speed, logger,epoch ,device="cuda")

@@ -1,7 +1,7 @@
 # _*_coding:utf-8_*_
 # Name:Brian
-# Create_time:2021/2/1 17:07
-# file: utils.py
+# Create_time:2021/2/3 13:47
+# file: utils2.py
 # location:chengdu
 # number:610000
 import os
@@ -11,7 +11,6 @@ import logging
 import time
 from metrics import *
 import matplotlib.pyplot as plt
-device="cuda"
 def get_logger(root, name=None, debug=True):
     time_lag=time.time()
     #when debug is true, show DEBUG and INFO in screen
@@ -44,7 +43,7 @@ def get_logger(root, name=None, debug=True):
     return logger
 
 
-def train_epoch(train_loader, adj_mx,net,optimizer,epoch,logger,loss_criterion,device="cuda",log_step=20):
+def train_epoch(train_loader, adj_mx,net,optimizer,epoch,logger,loss_criterion,device="cuda",log_step=10):
     """
     Trains one epoch with the given data.
     :param training_input: Training inputs of shape (num_samples, num_nodes,
@@ -56,13 +55,12 @@ def train_epoch(train_loader, adj_mx,net,optimizer,epoch,logger,loss_criterion,d
     """
     epoch_training_losses = []
     for batch_idx, (X_data, y_batch) in enumerate(train_loader):
-        net.to(device)
+        net.cuda()
         net.train()
         optimizer.zero_grad()
         y_batch=y_batch.to(device)
         X_batch=X_data[:,0:1,:,:].permute(2,0,3,1).to(device)   #T B  N C z
         mask_missing=X_data[:,1:2,:,:].permute(2,0,3,1).to(device)
-        del X_data
         out = net(X_batch,adj_mx,mask_missing)
         del X_batch
         loss = loss_criterion(out, y_batch)
@@ -82,7 +80,6 @@ def train_epoch(train_loader, adj_mx,net,optimizer,epoch,logger,loss_criterion,d
 
 
 def val_epoch(val_loader,net,adj_mx,epoch,logger,loss_criterion,device="cuda",log_step=20):
-    net.to(device)
     epoch_val_losses = []
     with torch.no_grad():
         for batch_idx, (X_data, y_batch) in enumerate(val_loader):
@@ -92,7 +89,6 @@ def val_epoch(val_loader,net,adj_mx,epoch,logger,loss_criterion,device="cuda",lo
             out = net(X_batch,adj_mx,mask_missing)
             # y_batch=y_batch.to(device)
             val_loss = loss_criterion(out, y_batch)
-            del X_data
             del y_batch
             del out
             if batch_idx % log_step == 0:
@@ -104,7 +100,7 @@ def val_epoch(val_loader,net,adj_mx,epoch,logger,loss_criterion,device="cuda",lo
         del val_loader
         return train_epoch_loss
 
-def test_all(adj_mx, test_loader,model,max_speed,logger,device="cuda"):
+def test_all(adj_mx, test_loader,model,max_speed,logger,epochs,device="cuda"):
     model.to(device)
     model.eval()
     mae_list = []
@@ -116,12 +112,11 @@ def test_all(adj_mx, test_loader,model,max_speed,logger,device="cuda"):
             y_batch=y_batch*max_speed
             mask_missing = X_data[:, 1:2, :, :].permute(2, 0, 3, 1).to(device)
             X_batch = X_data[:, 0:1, :, :].permute(2, 0, 3, 1).to(device)  # T B  N C z
-            del X_data
             output = model(X_batch,adj_mx,mask_missing)*max_speed
 
-            # mae, rmse, mape= metrics_NEW(output, y_batch, max_speed)
+
             # target_unnormalized = y_batch.detach().cpu().numpy()
-            mae, rmse, mape, _, _ = All_Metrics(output, y_batch, 0, 0.)
+            mae, rmse, mape, _, _ = All_Metrics(output, y_batch, None, 0.)
             logger.info("test_eopch_old:{}/{}:, MAE: {:.2f}, RMSE: {:.2f}, MAPE: {:.2f}%".format(
                 batch_idx,len(test_loader), mae, rmse, mape*100 ))
 
@@ -135,10 +130,12 @@ def test_all(adj_mx, test_loader,model,max_speed,logger,device="cuda"):
         plt.plot(mae_list, "b", label="mae_list")
         plt.plot(rmse_list, "g", label="rmse_list")
         ax1.set_ylabel('MSE and RMSE values')
-        ax1.set_title("Result of test epochs")
+        ax1.set_title("Result of test epochs-> %s "%epochs)
+        ax1.set_ylim(0,100)
         ax2 = ax1.twinx()  # this is the important function
         plt.plot(mape_list, "r", label="MAPE")
         ax2.set_ylabel('MAPE values')
+        ax2.set_ylim(0, 0.9)
         ax1.legend()
         ax2.legend()
         plt.show()

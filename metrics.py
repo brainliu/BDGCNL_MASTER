@@ -248,6 +248,22 @@ def masked_mae_np(y_true, y_pred, null_val=np.nan):
     mask /= mask.mean()
     mae = np.abs(y_true - y_pred)
     return np.mean(np.nan_to_num(mask * mae))
+
+def metrics_NEW(output_list,label_list,max_speed):
+    non_zero_index = np.nonzero(label_list)
+    MAE = np.mean(np.absolute(output_list[non_zero_index] - label_list[non_zero_index])) * max_speed
+    RMSE = np.sqrt(np.mean(np.square(output_list[non_zero_index] * max_speed - label_list[non_zero_index] * max_speed)))
+    MAPE = np.mean(
+        np.absolute(output_list[non_zero_index] - label_list[non_zero_index]) / label_list[non_zero_index]) * 100
+    del output_list
+    del label_list
+    del non_zero_index
+    MAE = np.around(MAE, decimals=3)
+    RMSE = np.around(RMSE, decimals=3)
+    MAPE = np.around(MAPE, decimals=3)
+    return MAE,RMSE,MAPE
+
+
 if __name__ == '__main__':
     pred = torch.Tensor(np.array([1, 2, 3,4]))
     true = torch.Tensor(np.array([2, 1, 4,5]))

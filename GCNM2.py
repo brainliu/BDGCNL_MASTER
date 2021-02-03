@@ -1,7 +1,7 @@
 # _*_coding:utf-8_*_
 # Name:Brian
-# Create_time:2021/1/27 15:56
-# file: GCNM.py
+# Create_time:2021/2/3 13:40
+# file: GCNM2.py
 # location:chengdu
 # number:610000
 #设计一个GCNM模块，处理缺失值的填充，先按照单向的方式设计
@@ -27,15 +27,13 @@ class GCNM_BLOCK(nn.Module):
         """
         index=int(data.shape[0]/2)
         x_origin=data[index:,:,:]  #转化为 N B C 取后面的半个值
-        data=torch.einsum('ii,ijk->ijk',adj,data).to(device)
+        data=torch.einsum('ii,ijk->ijk',adj,data)
         # print("GCN输出", data.shape)
         # shape is (2N, B, 2C') ,C'为filters的output维度
         data=self.FCconnected_GLU(data)
         lhs,rhs=torch.split(data,int(data.shape[2]/2),2)#shape is (2N, B, C'), (2N, B, C')
         #cropping 操作
-        data=lhs*torch.sigmoid(rhs).to(device)
-        del lhs
-        del rhs
+        data=lhs*torch.sigmoid(rhs)
         data=data[index:,:,:] #这里为啥要取后面的值，不如取最大值
 
         # lhs,rhs=torch.split(data, int(data.shape[0] / 2), 0) #新加的可以取分裂以后的最大值
@@ -69,10 +67,11 @@ class BDGCNM_BLOCK(nn.Module):
         mask_missing=mask_missing.transpose(1,2)
         #计算h0的值
         data_impution_list=[[],[]] #用来保存计算结果，两个之间要融合一下
+        fill_value=torch.mean(data).item() #增加了一个平均值填充的方法
         h0_for=torch.div(torch.sum(mask_missing,0),torch.sum(data,0)).to(device) # N B C
-        h0_for = torch.where(torch.isnan(h0_for), torch.full_like(h0_for, 1), h0_for)
+        h0_for = torch.where(torch.isnan(h0_for), torch.full_like(h0_for, fill_value), h0_for)
         h0_bac=torch.div(torch.sum(mask_missing,0),torch.sum(data,0)).to(device) #N B C
-        h0_bac = torch.where(torch.isnan(h0_bac), torch.full_like(h0_bac, 1), h0_bac)
+        h0_bac = torch.where(torch.isnan(h0_bac), torch.full_like(h0_bac, fill_value), h0_bac)
 
         result=[]
         #前向阶段
@@ -82,21 +81,20 @@ class BDGCNM_BLOCK(nn.Module):
             mask_missing_t=mask_missing[i] #N B C
             h0_for=self.muti_gcnm_forward[i](h_two,adjfor,mask_missing_t) #N B C
             data_impution_list[0].append(h0_for)
-        del h0_for #消除内存占用
-        del h_two
+        # del h0_for #消除内存占用
+        # del h_two
         for j in range(self.slide_length-1,-1,-1):
             # print(j)
             h_two_back=torch.cat([data[j],h0_bac],0) #反过来拼接
             mask_missing_t = mask_missing[j]
             h0_bac = self.muti_gcnm_backward[j](h_two_back, adjbac, mask_missing_t)
             data_impution_list[1].append(h0_bac)
-        del h0_bac #消除内存占用
-        del h_two_back
+        # del h0_bac #消除内存占用
+        # del h_two_back
         for k in range(self.slide_length):
         #取平均值,shape is  N  B C -> B N C -> B 1 N C
             temp=torch.mean(torch.stack([data_impution_list[0][k],data_impution_list[1][k] ]), 0).transpose(0,1)
             result.append(temp.unsqueeze(1))
-        del temp
         return torch.cat(result,1) # B q N C
 
 #定义一个滑动的BDGCNM_layer
@@ -116,7 +114,6 @@ class SLIDE_bdgcnm_layer(nn.Module):
         self.multi_bdgcn_blocks=torch.nn.ModuleList().to(device)
         self.multi_bdgcn_blocks2=torch.nn.ModuleList().to(device) #增加一层block来处理
         self.output_dims3=self.num_of_features*self.slide_length*self.slide_box_num
-        need_concat=[]
         for i in range(self.slide_box_num):
             #shape is B q N C,输出shape为这个
             self.multi_bdgcn_blocks.append(BDGCNM_BLOCK(slide_length,num_of_features))
@@ -140,12 +137,11 @@ class SLIDE_bdgcnm_layer(nn.Module):
             data_temp_2=temp_slide_box1.transpose(0,1) #转化为新的再进行一次处理
             temp_slide_box2 = self.multi_bdgcn_blocks2[index](data_temp_2, adjfor, adjbac, mask_missing_temp)
             #做了两次然后取最大值
+            # temp=torch.mean(torch.stack([temp_slide_box1, temp_slide_box2 ]), 0)
+            # result_slide_box.append(torch.mean(torch.stack([temp_slide_box1, temp_slide_box2 ]), 0))
             result_slide_box.append(torch.max(torch.cat([temp_slide_box1, temp_slide_box2], 3), 3)[0].unsqueeze(-1)) # slide_box_num 个 B q N C
-        del data_temp
-        del temp_slide_box1
-        del temp_slide_box2
-        del mask_missing_temp
         #shape B  N C*q*(T-q+1)
+            # result_slide_box.append(temp_slide_box2)
         return torch.cat(result_slide_box,1).reshape(-1,self.number_of_verticals,self.output_dims3)
 
 class BDGCNM_model(nn.Module):
@@ -166,9 +162,9 @@ class BDGCNM_model(nn.Module):
         self.output_layer2 = nn.ModuleList().to(device)
         self.output_layer3=nn.ModuleList().to(device)
         for i in range(predict_length):
-            self.outputlayer_1.append(nn.Linear(self.input_dims,2*self.predict_length)).to(device)
-            self.output_layer2.append(nn.Linear(2*self.predict_length, 1)).to(device)
-            # self.output_layer3.append(nn.Linear(2 * self.predict_length, 1)).to(device)
+            self.outputlayer_1.append(nn.Linear(self.input_dims,3*self.predict_length)).to(device)
+            self.output_layer2.append(nn.Linear(3*self.predict_length, 2*self.predict_length)).to(device)
+            self.output_layer3.append(nn.Linear(2 * self.predict_length, 1)).to(device)
         self.reset_parameters()
     def reset_parameters(self):
         torch.nn.init.constant_(self.mask_for, 1.0)
@@ -190,10 +186,11 @@ class BDGCNM_model(nn.Module):
             hidden=self.outputlayer_1[j](bdgcn_output)
             hidden = F.relu(hidden, inplace=True)
             hidden=self.output_layer2[j](hidden) #(B, 1, N)
-            # hidden=self.output_layer3[j](hidden)
+            hidden = F.relu(hidden, inplace=True)
+            hidden=self.output_layer3[j](hidden)
             result_predict.append(hidden.transpose(1,2))
-        del data
-        del hidden
+        # del data
+        # del hidden
         return torch.cat(result_predict,1) #(B, T', N)
 
 
