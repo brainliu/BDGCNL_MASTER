@@ -13,7 +13,7 @@ from torch.autograd import Variable
 import torch
 import matplotlib.pylab as plt
 import torch.utils.data as utils
-
+device="cuda"
 def construct_adj_matrix(distanc_path="./data/METR-LA/distances_la_2012.csv",
                          data_path='./data/METR-LA/metr-la.h5',
                          save_path="./data/METR-LA/la_2012_adj.npy"):
@@ -54,18 +54,10 @@ def construct_adj_matrix(distanc_path="./data/METR-LA/distances_la_2012.csv",
 
 
 
-speed_matrix=pd.read_hdf('./data/PEMS-BAY/pems-bay.h5')
 
-mask_ones_proportion=0.8 #不缺失的值的比率
-seq_len=12
-pred_len=12
-shuffle=True
-train_propotion=0.6
-valid_propotion=0.2
-BATCH_SIZE=32
 
-def prepare_dataset(speed_matrix,BATCH_SIZE = 64,seq_len = 10, pred_len = 12,train_propotion = 0.7,
-                    valid_propotion = 0.2, mask_ones_proportion = 0.8,random_seed = 1024):
+def prepare_dataset(speed_matrix,BATCH_SIZE = 64,seq_len = 12, pred_len = 12,train_propotion = 0.7,
+                    valid_propotion = 0.2, mask_ones_proportion = 0.5,random_seed = 1024,shuffle=True):
     time_len = speed_matrix.shape[0]
     speed_matrix = speed_matrix.clip(0, 100)
     max_speed = speed_matrix.max().max()
@@ -138,6 +130,15 @@ def construct_adj_double(adj_data,steps=2):
     return adj
 
 if __name__ == '__main__':
+    speed_matrix = pd.read_hdf('./data/PEMS-BAY/pems-bay.h5')
+
+    mask_ones_proportion = 0.8  # 不缺失的值的比率
+    seq_len = 12
+    pred_len = 12
+    shuffle = True
+    train_propotion = 0.6
+    valid_propotion = 0.2
+    BATCH_SIZE = 32
 
     construct_adj_matrix("./data/PEMS-BAY/distances_bay_2017.csv",
                              "./data/PEMS-BAY/pems-bay.h5",
