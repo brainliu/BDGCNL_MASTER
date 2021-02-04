@@ -25,8 +25,8 @@ data_path='./data/PEMS-BAY/pems-bay.h5'
 num_of_vertices= 325
 num_of_features= 1
 device="cuda"
-speed_matrix=pd.read_hdf(data_path)#[1:10000]
-mask_ones_proportion=0.9 #不缺失的值的比率
+speed_matrix=pd.read_hdf(data_path)[0:1024]
+mask_ones_proportion=0.8 #不缺失的值的比率
 seq_len=10
 pred_len=12
 slide_length=5
@@ -47,7 +47,11 @@ logger.info("BATCH_SIZE: {}".format( BATCH_SIZE))
 
 
 
-adj_data=np.load("./data/PEMS-BAY/pems-bay_adj.npy")
+adj_data=np.load("./data/PEMS-BAY/pems-bay_adj2.npy")
+# adj_data,iivalue=construct_adj_matrix_distance("./data/PEMS-BAY/distances_bay_2017.csv",
+#                          "./data/PEMS-BAY/pems-bay.h5",
+#                          "./data/PEMS-BAY/pems-bay_adj2.npy")
+# adj_two=construct_adj_double2(adj_data,iivalue,steps=2)
 adj_two=construct_adj_double(adj_data,steps=2)
 adj_two=torch.Tensor(adj_two).to(device) #转化为tensor
 train_dataloader, valid_dataloader, test_dataloader, max_speed, X_mean=prepare_dataset(speed_matrix,logger,mask_ones_proportion=mask_ones_proportion,seq_len=seq_len,pred_len = pred_len,BATCH_SIZE=BATCH_SIZE)
@@ -62,15 +66,15 @@ validation_losses=[]
 ###########模型保存设置和训练
 best_model = None
 best_loss = float('inf')
-not_improved_count = 10
-start_epoch = 1
-epochs=100
-RESUME=0
+not_improved_count = 0
+start_epoch = 205  #从201开始学习小数据训练，然后数据集0:1024 为之前的保存点
+epochs=500
+RESUME=1
 logger.info("epochs:{} ".format( epochs))
 
 
 if RESUME:
-    path_checkpoint = "./models/checkpoint/ckpt_best_%s.pth"%start_epoch  # 断点路径
+    path_checkpoint = "./models/checkpoint/2ckpt_best_%s.pth"%start_epoch  # 断点路径
     checkpoint = torch.load(path_checkpoint)  # 加载断点
 
     model_bdgcnm.load_state_dict(checkpoint['net'])  # 加载模型可学习参数
@@ -100,7 +104,7 @@ for epoch in range(start_epoch, epochs + 1):
 
     logger.info('**********Training loss: {},Validation loss: {}'.format(training_losses[-1],
                                                                          validation_losses[-1]))
-    plt.ylim(0, 0.5)
+    plt.ylim(0, 0.1)
     plt.plot(training_losses, label="training loss")
     plt.plot(validation_losses, label="validation loss")
 
@@ -119,7 +123,7 @@ for epoch in range(start_epoch, epochs + 1):
     }
     if not os.path.isdir("./models/checkpoint"):
         os.makedirs("./models/checkpoint")
-    torch.save(checkpoint, './models/checkpoint/ckpt_best_%s.pth' % (str(epoch)))
+    torch.save(checkpoint, './models/checkpoint/2ckpt_best_%s.pth' % (str(epoch)))
     save_path = os.path.join(root, 'best_model.pth')
     torch.save(best_model, save_path)
     logger.info("Saving current best model to " + save_path)

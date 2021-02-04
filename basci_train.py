@@ -51,8 +51,8 @@ validation_losses=[]
 
 best_model = None
 best_loss = float('inf')
-not_improved_count = 0
-start_epoch = 2
+not_improved_count = 10
+start_epoch = 3
 epochs=20
 RESUME=1
 if RESUME:

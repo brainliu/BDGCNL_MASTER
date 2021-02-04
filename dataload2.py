@@ -53,7 +53,44 @@ def construct_adj_matrix(distanc_path="./data/METR-LA/distances_la_2012.csv",
 
 
 
+def construct_adj_matrix_distance(distanc_path="./data/METR-LA/distances_la_2012.csv",
+                         data_path='./data/METR-LA/metr-la.h5',
+                         save_path="./data/METR-LA/la_2012_adj.npy"):
+    distance_dict={}
+    distance_data=pd.read_csv(distanc_path)
+    max_data_dis=max(distance_data.max())
+    ii_value=distance_data.mean().mean()/max_data_dis
+    for i in range(len(distance_data)):
+        keys=str(distance_data.iloc[i,0])+str(distance_data.iloc[i,1])
+        value_dis=distance_data.iloc[i,2]
+        distance_dict[keys]=value_dis
+    origin_Data=pd.read_hdf(data_path)
+    sensors_id=origin_Data.columns
+    adj_matrix=[]
+    for id1 in sensors_id:
+        adj_matx_temp=[]
+        for id2 in sensors_id:
+            keys_id12=str(id1)+str(id2)
+            keys_id21=str(id2)+str(id1)
+            temp=0
+            if keys_id12==keys_id21:
+                adj_matx_temp.append(ii_value)
+                continue
+            if keys_id12 in distance_dict.keys():
+                if distance_dict[keys_id12]:
+                    adj_matx_temp.append(distance_dict[keys_id12]/max_data_dis)
+                    continue
+            if keys_id21 in distance_dict.keys():
+                if distance_dict[keys_id21]:
+                    adj_matx_temp.append(distance_dict[keys_id21]/max_data_dis)
+                    continue
+            else:
+                adj_matx_temp.append(0)
 
+        adj_matrix.append(adj_matx_temp)
+    adj_result=np.array(adj_matrix)
+    np.save(save_path,adj_result)
+    return  adj_result,ii_value
 
 
 def prepare_dataset(speed_matrix,logger,BATCH_SIZE = 64,seq_len = 10, pred_len = 12,train_propotion = 0.7,
@@ -132,6 +169,20 @@ def construct_adj_double(adj_data,steps=2):
         adj[i, i] = 1
     return adj
 
+def construct_adj_double2(adj_data,iivalue,steps=2):
+    N = len(adj_data)
+    adj = np.zeros([N * 2] * 2)
+    for i in range(steps):
+        adj[i * N: (i + 1) * N, i * N: (i + 1) * N] = adj_data
+
+    for i in range(N):
+        for k in range(steps-1):
+            adj[k * N + i, (k + 1) * N + i] = iivalue
+            adj[(k + 1) * N + i, k * N + i] = iivalue
+    for i in range(len(adj)):
+        adj[i, i] = iivalue
+    return adj
+
 if __name__ == '__main__':
     speed_matrix = pd.read_hdf('./data/PEMS-BAY/pems-bay.h5')
 
@@ -143,13 +194,15 @@ if __name__ == '__main__':
     valid_propotion = 0.2
     BATCH_SIZE = 32
 
-    construct_adj_matrix("./data/PEMS-BAY/distances_bay_2017.csv",
-                             "./data/PEMS-BAY/pems-bay.h5",
-                             "./data/PEMS-BAY/pems-bay_adj.npy")
-
-    adj_data=np.load("./data/PEMS-BAY/pems-bay_adj.npy")
+    # construct_adj_matrix("./data/PEMS-BAY/distances_bay_2017.csv",
+    #                          "./data/PEMS-BAY/pems-bay.h5",
+    #                          "./data/PEMS-BAY/pems-bay_adj.npy")
+    adj2,iivalue=construct_adj_matrix_distance("./data/PEMS-BAY/distances_bay_2017.csv",
+                         "./data/PEMS-BAY/pems-bay.h5",
+                         "./data/PEMS-BAY/pems-bay_adj2.npy")
+    adj_data=np.load("./data/PEMS-BAY/pems-bay_adj2.npy")
     adj_two=construct_adj_double(adj_data,steps=2)
-    train_dataloader, valid_dataloader, test_dataloader, max_speed, X_mean=prepare_dataset(speed_matrix)
+    # train_dataloader, valid_dataloader, test_dataloader, max_speed, X_mean=prepare_dataset(speed_matrix)
 
 
 
