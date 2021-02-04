@@ -1,0 +1,10 @@
+2021-02-04 08:56:44: Experiment log path in: ./PEMS-BAY/
+2021-02-04 08:56:44: Note: NumExpr detected 16 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2021-02-04 08:56:44: NumExpr defaulting to 8 threads.
+2021-02-04 08:56:44: model setting:1612400204.7161996 
+2021-02-04 08:56:44: data_path locatin:../data/PEMS-BAY/pems-bay.h5 
+2021-02-04 08:56:44: history seq_len: 10
+2021-02-04 08:56:44: predict pred_len: 12
+2021-02-04 08:56:44: slide_length:5 
+2021-02-04 08:56:44: train_propotion and  valid_propotion: 0.6  0.2 
+2021-02-04 08:56:44: BATCH_SIZE: 24
